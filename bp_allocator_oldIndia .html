@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BP Task Allocator - SLA-Based Distribution</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section h2 {
+            font-size: 18px;
+            color: #667eea;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section h2::before {
+            content: attr(data-step);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-input-button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            text-align: center;
+            background: #f0f0f0;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            color: #667eea;
+        }
+
+        .file-input-button:hover {
+            background: #f9f9f9;
+            border-color: #764ba2;
+        }
+
+        .file-input-button.loaded {
+            background: #e8f5e9;
+            border-color: #4caf50;
+            color: #2e7d32;
+        }
+
+        .users-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .user-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .user-checkbox:hover {
+            background: #f0f0f0;
+        }
+
+        .user-checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+
+        .user-checkbox input[type="checkbox"]:checked + label {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .user-checkbox label {
+            cursor: pointer;
+            flex: 1;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .user-actions button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #f0f0f0;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .user-actions button:hover {
+            background: #e0e0e0;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .status.success {
+            display: block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #4caf50;
+        }
+
+        .status.error {
+            display: block;
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #f44336;
+        }
+
+        .status.info {
+            display: block;
+            background: #e3f2fd;
+            color: #1565c0;
+            border-left: 4px solid #2196f3;
+        }
+
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .results h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .allocation-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .stat-card .count {
+            font-size: 24px;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 13px;
+        }
+
+        .preview-table th {
+            background: #667eea;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .preview-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .preview-table tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        .disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-content h3 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .modal-content select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .modal-buttons .btn-confirm {
+            background: #d32f2f;
+            color: white;
+        }
+
+        .modal-buttons .btn-cancel {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        @media (max-width: 600px) {
+            .users-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            header h1 {
+                font-size: 22px;
+            }
+
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 BP Task Allocator</h1>
+            <p>Intelligent SLA-based distribution of Business Partner codes to your team</p>
+        </header>
+
+        <div class="content">
+            <!-- Step 1: File Upload -->
+            <div class="section">
+                <h2 data-step="1">Upload Excel File</h2>
+                <div class="file-input-wrapper">
+                    <label for="excelFile" class="file-input-button">
+                        📁 Click to select your BP export Excel file
+                    </label>
+                    <input type="file" id="excelFile" accept=".xlsx,.xls">
+                </div>
+                <div class="status" id="uploadStatus"></div>
+            </div>
+
+            <!-- Step 2: Select Users -->
+            <div class="section" id="usersSection">
+                <h2 data-step="2">Select Working Users</h2>
+                <div class="user-actions">
+                    <button id="selectAllBtn" onclick="selectAllUsers()">Select All</button>
+                    <button id="selectNoneBtn" onclick="selectNoUsers()">Select None</button>
+                    <button class="btn-secondary" onclick="addUser()" style="background: #e3f2fd; color: #1976d2; font-size: 13px;">➕ Add User</button>
+                    <button class="btn-secondary" onclick="deleteUser()" style="background: #ffebee; color: #d32f2f; font-size: 13px;">➖ Delete User</button>
+                    <button class="btn-secondary" onclick="resetToDefault()" style="background: #f3e5f5; color: #7b1fa2; font-size: 13px;">🔄 Reset</button>
+                </div>
+                <div class="users-grid" id="usersGrid"></div>
+                <div class="status" id="usersStatus"></div>
+            </div>
+
+            <!-- Step 3: Allocate -->
+            <div class="section disabled" id="allocateSection">
+                <h2 data-step="3">Allocate & Download</h2>
+                <p style="margin-bottom: 15px; font-size: 14px; color: #666;">
+                    The system will distribute your BP codes to selected users based on SLA urgency,
+                    ensuring each person gets roughly equal workload and urgent items are spread evenly.
+                </p>
+                <div class="action-buttons">
+                    <button class="btn-primary" id="allocateBtn" onclick="performAllocation()">
+                        🚀 Allocate Tasks
+                    </button>
+                    <button class="btn-secondary" id="downloadBtn" style="display:none;" onclick="downloadExcel()">
+                        ⬇️ Download Excel
+                    </button>
+                </div>
+                <div class="status" id="allocateStatus"></div>
+            </div>
+
+            <!-- Results -->
+            <div class="results" id="results">
+                <h3>✓ Allocation Complete</h3>
+                <div class="allocation-stats" id="allocationStats"></div>
+                <table class="preview-table" id="previewTable"></table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete User Modal -->
+    <div class="modal" id="deleteUserModal">
+        <div class="modal-content">
+            <h3>Delete User</h3>
+            <select id="userSelectDropdown">
+                <option value="">-- Select a user to delete --</option>
+            </select>
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn-confirm" onclick="confirmDeleteUser()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let excelData = null;
+        let allocatedData = null;
+        const defaultUsers = [
+            "BALASUBRAMANIYAN DINESH", "DURAIMURUGAN RAVINDRANATH", "DURAIRAJAN SANGAVI", "ISWARYA KUMAR",
+            "KARNAN KALAIMANI", "MAHALAKSHMI BASKAR", "MATHEW BENITA", "PAULRAJ PRAVEENA",
+            "SHEIK ABDULLAH HAARISH ABDULLAH", "SURUTHI RAJENDHIRAN"
+        ];
+
+        let availableUsers = loadUsers();
+
+        // Load users from localStorage or use default (INDIA TEAM - separate storage key)
+        function loadUsers() {
+            const saved = localStorage.getItem('bp_allocator_users_india');
+            return saved ? JSON.parse(saved) : defaultUsers;
+        }
+
+        // Save users to localStorage (INDIA TEAM - separate storage key)
+        function saveUsers() {
+            localStorage.setItem('bp_allocator_users_india', JSON.stringify(availableUsers));
+        }
+
+        // Add new user
+        function addUser() {
+            const newUserInput = prompt('Enter new user name (uppercase):');
+            if (!newUserInput || newUserInput === 'null') return;
+
+            const upperName = newUserInput.toUpperCase().trim();
+            if (!upperName) return;
+
+            if (availableUsers.includes(upperName)) {
+                alert('User already exists!');
+                return;
+            }
+
+            availableUsers.push(upperName);
+            availableUsers.sort();
+            saveUsers();
+            initializeUsersGrid();
+            showStatus('usersStatus', 'success', `✓ Added: ${upperName}`);
+        }
+
+        // Show delete user modal
+        function deleteUser() {
+            const dropdown = document.getElementById('userSelectDropdown');
+            dropdown.innerHTML = '<option value="">-- Select a user to delete --</option>';
+
+            availableUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user;
+                option.textContent = user;
+                dropdown.appendChild(option);
+            });
+
+            document.getElementById('deleteUserModal').classList.add('show');
+        }
+
+        // Close delete modal
+        function closeDeleteModal() {
+            document.getElementById('deleteUserModal').classList.remove('show');
+            document.getElementById('userSelectDropdown').value = '';
+        }
+
+        // Confirm delete user
+        function confirmDeleteUser() {
+            const userToDelete = document.getElementById('userSelectDropdown').value;
+
+            if (!userToDelete) {
+                alert('Please select a user to delete');
+                return;
+            }
+
+            const index = availableUsers.indexOf(userToDelete);
+            if (index === -1) {
+                alert('User not found!');
+                closeDeleteModal();
+                return;
+            }
+
+            availableUsers.splice(index, 1);
+            saveUsers();
+            initializeUsersGrid();
+            showStatus('usersStatus', 'success', `✓ Deleted: ${userToDelete}`);
+            closeDeleteModal();
+        }
+
+        // Reset to default users
+        function resetToDefault() {
+            if (confirm('Reset to default user list? This will remove all custom changes.')) {
+                availableUsers = [...defaultUsers];
+                saveUsers();
+                initializeUsersGrid();
+                showStatus('usersStatus', 'success', '✓ Reset to default users');
+            }
+        }
+
+        // Initialize users grid
+        function initializeUsersGrid() {
+            const grid = document.getElementById('usersGrid');
+            grid.innerHTML = '';
+            availableUsers.forEach((user, index) => {
+                const label = document.createElement('label');
+                label.className = 'user-checkbox';
+                label.innerHTML = `
+                    <input type="checkbox" name="user" value="${user}" data-index="${index}">
+                    <label>${user}</label>
+                `;
+                grid.appendChild(label);
+            });
+        }
+
+        // File upload handler
+        document.getElementById('excelFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Check if XLSX library is loaded
+            if (typeof XLSX === 'undefined') {
+                showStatus('uploadStatus', 'error',
+                    '✗ XLSX library failed to load. Please refresh the page and try again.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const allData = XLSX.utils.sheet_to_json(worksheet);
+
+                    // Filter out rows where "Locked By" column contains "processing"
+                    const lockedByKey = Object.keys(allData[0] || {}).find(key =>
+                        key.toLowerCase().includes('locked')
+                    );
+
+                    let excludedCount = 0;
+                    if (lockedByKey) {
+                        excelData = allData.filter(row => {
+                            const lockedStatus = String(row[lockedByKey] || '').toLowerCase();
+                            if (lockedStatus.includes('processing')) {
+                                excludedCount++;
+                                return false;
+                            }
+                            return true;
+                        });
+                    } else {
+                        excelData = allData;
+                    }
+
+                    let statusMsg = `✓ Loaded ${excelData.length} BP records`;
+                    if (excludedCount > 0) {
+                        statusMsg += ` (${excludedCount} with 'processing' status excluded)`;
+                    }
+                    showStatus('uploadStatus', 'success', statusMsg);
+
+                    document.getElementById('excelFile').parentElement.classList.add('loaded');
+
+                    initializeUsersGrid();
+                    updateAllocationButtonState();
+                } catch (error) {
+                    showStatus('uploadStatus', 'error', '✗ Error reading file: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function selectAllUsers() {
+            document.querySelectorAll('#usersGrid input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+            });
+        }
+
+        function selectNoUsers() {
+            document.querySelectorAll('#usersGrid input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+        }
+
+        function getSelectedUsers() {
+            return Array.from(document.querySelectorAll('#usersGrid input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+        }
+
+        function updateAllocationButtonState() {
+            const selected = getSelectedUsers();
+            const fileLoaded = excelData && excelData.length > 0;
+
+            if (selected.length > 0 && fileLoaded) {
+                document.getElementById('allocateSection').classList.remove('disabled');
+            } else {
+                document.getElementById('allocateSection').classList.add('disabled');
+            }
+        }
+
+        document.getElementById('usersGrid').addEventListener('change', function() {
+            const selected = getSelectedUsers();
+            if (selected.length > 0) {
+                showStatus('usersStatus', 'info', `✓ ${selected.length} user(s) selected`);
+            } else {
+                document.getElementById('usersStatus').style.display = 'none';
+            }
+            updateAllocationButtonState();
+        });
+
+        function parseSLAMinutes(slaStr) {
+            if (!slaStr) return Infinity;
+            const match = String(slaStr).match(/d\s*-\s*(\d{1,2}):(\d{2})/);
+            if (match) {
+                return parseInt(match[1]) * 60 + parseInt(match[2]);
+            }
+            return Infinity;
+        }
+
+        function performAllocation() {
+            const selected = getSelectedUsers();
+            if (selected.length === 0) {
+                showStatus('allocateStatus', 'error', 'Please select at least one user');
+                return;
+            }
+
+            if (!excelData) {
+                showStatus('allocateStatus', 'error', 'Please upload an Excel file first');
+                return;
+            }
+
+            try {
+                // Parse SLA and sort by urgency (most urgent first)
+                const sorted = excelData.map(row => ({
+                    ...row,
+                    sla_minutes: parseSLAMinutes(row['SLA Remaining'])
+                })).sort((a, b) => a.sla_minutes - b.sla_minutes);
+
+                // Allocate round-robin (spread across users)
+                // Each person gets tasks distributed evenly
+                allocatedData = sorted.map((row, index) => ({
+                    ...row,
+                    'Assigned To': selected[index % selected.length]
+                }));
+
+                // Sort by assigned user name (ascending alphabetically)
+                allocatedData.sort((a, b) =>
+                    a['Assigned To'].localeCompare(b['Assigned To'])
+                );
+
+                // Calculate stats
+                const stats = {};
+                selected.forEach(user => {
+                    stats[user] = allocatedData.filter(r => r['Assigned To'] === user).length;
+                });
+
+                showStatus('allocateStatus', 'success',
+                    `✓ Allocated ${allocatedData.length} tasks across ${selected.length} users (sorted by name)`);
+
+                displayResults(stats);
+                document.getElementById('downloadBtn').style.display = 'block';
+            } catch (error) {
+                showStatus('allocateStatus', 'error', 'Error during allocation: ' + error.message);
+            }
+        }
+
+        function displayResults(stats) {
+            // Stats cards
+            const statsDiv = document.getElementById('allocationStats');
+            statsDiv.innerHTML = '';
+            Object.entries(stats).forEach(([user, count]) => {
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.innerHTML = `
+                    <div class="count">${count}</div>
+                    <div class="label">${user}</div>
+                `;
+                statsDiv.appendChild(card);
+            });
+
+            // Preview table
+            const table = document.getElementById('previewTable');
+            const thead = table.createTHead();
+            const headerRow = thead.insertRow();
+            ['Business Partner ID', 'Request Type', 'SLA Remaining', 'Assigned To'].forEach(col => {
+                const th = document.createElement('th');
+                th.textContent = col;
+                headerRow.appendChild(th);
+            });
+
+            const tbody = table.querySelector('tbody') || table.createTBody();
+            tbody.innerHTML = '';
+            allocatedData.slice(0, 10).forEach(row => {
+                const tr = tbody.insertRow();
+                const cols = [
+                    row['Business Partners ID'] || row['Business Partner ID'],
+                    row['Request Type'],
+                    row['SLA Remaining'],
+                    row['Assigned To']
+                ];
+                cols.forEach(col => {
+                    const td = tr.insertCell();
+                    td.textContent = col;
+                });
+            });
+
+            document.getElementById('results').classList.add('show');
+        }
+
+        function downloadExcel() {
+            if (!allocatedData) return;
+
+            // Check if ExcelJS is loaded
+            if (typeof ExcelJS === 'undefined') {
+                showStatus('allocateStatus', 'error', '⚠️ Excel library loading. Please wait and try again.');
+                return;
+            }
+
+            // Create a new workbook
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Allocated BPs');
+
+            // Add headers
+            const headers = ['Business Partner ID', 'Assigned To Team', 'Request Type', 'SLA Remaining',
+                           'Category', 'BP Type', 'Action 1', 'Action 2', 'Assigned To'];
+            worksheet.addRow(headers);
+
+            // Style headers
+            worksheet.getRow(1).font = { bold: true };
+            worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF667EEA' } };
+            worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+            // Add data rows
+            allocatedData.forEach(row => {
+                worksheet.addRow([
+                    row['Business Partners ID'] || row['Business Partner ID'],
+                    row['Assigned To Team'],
+                    row['Request Type'],
+                    row['SLA Remaining'],
+                    row['Category  '] || row['Category'],
+                    row['BP Types'],
+                    '', // Action 1
+                    '', // Action 2
+                    row['Assigned To']
+                ]);
+            });
+
+            // Add data validation for Action 1 (column G)
+            const action1Options = 'Approved,RFI,Reassign,Deny Delete,Update without validation';
+            for (let i = 2; i <= allocatedData.length + 1; i++) {
+                worksheet.getCell(`G${i}`).dataValidation = {
+                    type: 'list',
+                    formula1: `"${action1Options}"`,
+                    showInputMessage: true,
+                    promptTitle: 'Select Action 1',
+                    prompt: 'Choose from: Approved, RFI, Reassign, Deny Delete, Update without validation'
+                };
+            }
+
+            // Add data validation for Action 2 (column H)
+            const action2Options = 'Deny Duplicate,Approved,Reset';
+            for (let i = 2; i <= allocatedData.length + 1; i++) {
+                worksheet.getCell(`H${i}`).dataValidation = {
+                    type: 'list',
+                    formula1: `"${action2Options}"`,
+                    showInputMessage: true,
+                    promptTitle: 'Select Action 2',
+                    prompt: 'Choose from: Deny Duplicate, Approved, Reset'
+                };
+            }
+
+            // Set column widths
+            worksheet.columns = [
+                { width: 16 }, // Business Partner ID
+                { width: 18 }, // Assigned To Team
+                { width: 25 }, // Request Type
+                { width: 16 }, // SLA Remaining
+                { width: 15 }, // Category
+                { width: 10 }, // BP Type
+                { width: 20 }, // Action 1
+                { width: 18 }, // Action 2
+                { width: 18 }  // Assigned To
+            ];
+
+            // Write file
+            const timestamp = new Date().toISOString().slice(0, 10);
+            workbook.xlsx.writeBuffer().then(buffer => {
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `BP_Allocation_${timestamp}.xlsx`;
+                link.click();
+                showStatus('allocateStatus', 'success', '✓ Excel file downloaded with dropdowns!');
+            });
+        }
+
+        function showStatus(elementId, type, message) {
+            const el = document.getElementById(elementId);
+            el.className = `status ${type}`;
+            el.textContent = message;
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('deleteUserModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeDeleteModal();
+            }
+        });
+
+        // Initialize
+        initializeUsersGrid();
+
+        // Check if XLSX loaded
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (typeof XLSX === 'undefined') {
+                    showStatus('uploadStatus', 'error',
+                        '⚠️ XLSX library may not have loaded. If Excel upload fails, try refreshing the page.');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
